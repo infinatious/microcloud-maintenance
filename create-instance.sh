@@ -36,8 +36,22 @@ read -r -p 'Boot disk size (GiB, number only): ' DISK_GIB
 [[ "${RAM_GIB}" =~ ^[0-9]+$ ]] || fail 'RAM must be numeric GiB.'
 [[ "${DISK_GIB}" =~ ^[0-9]+$ ]] || fail 'boot disk size must be numeric GiB.'
 
-PROFILE_NAME="${PROJECT_NAME}"
+PROFILE_TYPE=''
+PROFILE_NAME=''
 NETWORK_NAME="${PROJECT_NAME}"
+
+read -r -p 'Profile type to use (linux or win): ' PROFILE_TYPE
+case "${PROFILE_TYPE}" in
+  linux|Linux|l)
+    PROFILE_NAME="${PROJECT_NAME}-linux"
+    ;;
+  win|Windows|w)
+    PROFILE_NAME="${PROJECT_NAME}-win"
+    ;;
+  *)
+    fail 'profile type must be linux or win.'
+    ;;
+esac
 
 lxc project show "${PROJECT_NAME}" >/dev/null 2>&1 || fail "project '${PROJECT_NAME}' does not exist."
 lxc profile show "${PROFILE_NAME}" --project "${PROJECT_NAME}" >/dev/null 2>&1 || fail "profile '${PROFILE_NAME}' does not exist in project '${PROJECT_NAME}'."

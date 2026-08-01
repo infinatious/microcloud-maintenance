@@ -32,11 +32,14 @@ if [[ -n "${INSTANCE_LIST}" ]]; then
   exit 1
 fi
 
-if lxc profile show "${PROFILE_NAME}" --project "${PROJECT_NAME}" >/dev/null 2>&1; then
-  echo "Deleting profile '${PROFILE_NAME}'..."
-  run lxc profile delete "${PROFILE_NAME}" --project "${PROJECT_NAME}"
+mapfile -t PROFILE_NAMES < <(lxc profile list --project "${PROJECT_NAME}" --format csv -c n 2>/dev/null || true)
+if (( ${#PROFILE_NAMES[@]} > 0 )); then
+  for PROFILE_NAME in "${PROFILE_NAMES[@]}"; do
+    echo "Deleting profile '${PROFILE_NAME}'..."
+    run lxc profile delete "${PROFILE_NAME}" --project "${PROJECT_NAME}"
+  done
 else
-  echo "Profile '${PROFILE_NAME}' not found, skipping."
+  echo "No project profiles found, skipping."
 fi
 
 if lxc network show "${NETWORK_NAME}" --project "${PROJECT_NAME}" >/dev/null 2>&1; then
