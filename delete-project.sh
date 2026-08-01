@@ -35,6 +35,10 @@ fi
 mapfile -t PROFILE_NAMES < <(lxc profile list --project "${PROJECT_NAME}" --format csv -c n 2>/dev/null || true)
 if (( ${#PROFILE_NAMES[@]} > 0 )); then
   for PROFILE_NAME in "${PROFILE_NAMES[@]}"; do
+    if [[ "${PROFILE_NAME}" == 'default' ]]; then
+      echo "Skipping built-in profile '${PROFILE_NAME}'."
+      continue
+    fi
     echo "Deleting profile '${PROFILE_NAME}'..."
     run lxc profile delete "${PROFILE_NAME}" --project "${PROJECT_NAME}"
   done
