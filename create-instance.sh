@@ -26,15 +26,9 @@ require_cmd python3
 read -r -p 'Project name: ' PROJECT_NAME
 read -r -p 'Environment (p=production, t=test, q=qa, d=dev): ' ENV_CODE
 read -r -p 'Five-character service code: ' SERVICE_CODE
-read -r -p 'CPU cores: ' CPU_CORES
-read -r -p 'RAM (GiB, number only): ' RAM_GIB
-read -r -p 'Boot disk size (GiB, number only): ' DISK_GIB
 
 [[ -n "${PROJECT_NAME}" ]] || fail 'project name cannot be empty.'
 [[ "${SERVICE_CODE}" =~ ^[A-Za-z0-9]{5}$ ]] || fail 'service code must be exactly 5 alphanumeric characters.'
-[[ "${CPU_CORES}" =~ ^[0-9]+$ ]] || fail 'CPU cores must be numeric.'
-[[ "${RAM_GIB}" =~ ^[0-9]+$ ]] || fail 'RAM must be numeric GiB.'
-[[ "${DISK_GIB}" =~ ^[0-9]+$ ]] || fail 'boot disk size must be numeric GiB.'
 
 PROFILE_TYPE=''
 PROFILE_NAME=''
@@ -55,6 +49,61 @@ esac
 
 lxc project show "${PROJECT_NAME}" >/dev/null 2>&1 || fail "project '${PROJECT_NAME}' does not exist."
 lxc profile show "${PROFILE_NAME}" --project "${PROJECT_NAME}" >/dev/null 2>&1 || fail "profile '${PROFILE_NAME}' does not exist in project '${PROJECT_NAME}'."
+PROFILE_SHOW_FILE="$(mktemp)"
+cleanup() {
+  rm -f "${PROFILE_SHOW_FILE}" "${DESC_FILE}"
+}
+trap cleanup EXIT
+lxc profile show "${PROFILE_NAME}" --project "${PROJECT_NAME}" > "${PROFILE_SHOW_FILE}"
+
+PROFILE_CPU_CORES="$(python3 - "${PROFILE_SHOW_FILE}" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+profile_path = Path(sys.argv[1])
+with profile_path.open() as f:
+    data = yaml.safe_load(f) or {}
+config = data.get('config', {}) or {}
+print(config.get('limits.cpu', '2'))
+PY
+)"
+PROFILE_RAM_GIB="$(python3 - "${PROFILE_SHOW_FILE}" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+profile_path = Path(sys.argv[1])
+with profile_path.open() as f:
+    data = yaml.safe_load(f) or {}
+config = data.get('config', {}) or {}
+mem = str(config.get('limits.memory', '4GiB'))
+print(mem.replace('GiB', '').replace('G', '').replace('i', '').replace('B', '').strip() or '4')
+PY
+)"
+PROFILE_DISK_GIB="$(python3 - "${PROFILE_SHOW_FILE}" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+profile_path = Path(sys.argv[1])
+with profile_path.open() as f:
+    data = yaml.safe_load(f) or {}
+devices = data.get('devices', {}) or {}
+root = devices.get('root', {}) or {}
+size = str(root.get('size', '20GiB'))
+print(size.replace('GiB', '').replace('G', '').replace('i', '').replace('B', '').strip() or '20')
+PY
+)"
+
+read -r -p "CPU cores [${PROFILE_CPU_CORES}]: " CPU_CORES
+CPU_CORES="${CPU_CORES:-${PROFILE_CPU_CORES}}"
+read -r -p "RAM (GiB, number only) [${PROFILE_RAM_GIB}]: " RAM_GIB
+RAM_GIB="${RAM_GIB:-${PROFILE_RAM_GIB}}"
+read -r -p "Boot disk size (GiB, number only) [${PROFILE_DISK_GIB}]: " DISK_GIB
+DISK_GIB="${DISK_GIB:-${PROFILE_DISK_GIB}}"
+
+[[ "${CPU_CORES}" =~ ^[0-9]+$ ]] || fail 'CPU cores must be numeric.'
+[[ "${RAM_GIB}" =~ ^[0-9]+$ ]] || fail 'RAM must be numeric GiB.'
+[[ "${DISK_GIB}" =~ ^[0-9]+$ ]] || fail 'boot disk size must be numeric GiB.'
+
 lxc network show "${NETWORK_NAME}" --project "${PROJECT_NAME}" >/dev/null 2>&1 || fail "network '${NETWORK_NAME}' does not exist in project '${PROJECT_NAME}'."
 
 NETWORK_IPV4_CIDR="$(lxc network get "${NETWORK_NAME}" ipv4.address --project "${PROJECT_NAME}" 2>/dev/null || true)"
@@ -145,10 +194,6 @@ LISTEN_IPV4="$(lxc network forward list "${NETWORK_NAME}" --project "${PROJECT_N
 
 DESCRIPTION_TEXT="image=${SELECTED_ALIAS} (${SELECTED_FP12}); type=${INSTANCE_TYPE}; cpu=${CPU_CORES}; ram=${RAM_GIB}GiB; boot=${DISK_GIB}GiB; instance_ip=${INSTANCE_IPV4}; forward_ip=${LISTEN_IPV4}"
 DESC_FILE="$(mktemp)"
-cleanup() {
-  rm -f "${DESC_FILE}"
-}
-trap cleanup EXIT
 lxc config show "${INSTANCE_NAME}" --project "${PROJECT_NAME}" > "${DESC_FILE}"
 python3 - "${DESC_FILE}" "${DESCRIPTION_TEXT}" <<'PY'
 import sys

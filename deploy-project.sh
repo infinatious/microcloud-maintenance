@@ -85,8 +85,8 @@ config:
   boot.autostart: "true"
   cloud-init.user-data: |
 $(printf '%s\n' "${CLOUD_INIT_CONTENT}" | sed 's/^/    /')
-  limits.cpu: "2"
-  limits.memory: 4GiB
+  limits.cpu: "1"
+  limits.memory: 2GiB
   snapshots.expiry: 3d
   snapshots.schedule: '@daily'
 description: ""
