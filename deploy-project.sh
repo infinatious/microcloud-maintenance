@@ -58,7 +58,7 @@ cleanup_project_metadata() {
 }
 trap 'cleanup_network; cleanup_project_metadata' ERR
 
-run lxc project show "${PROJECT_NAME}" --format yaml > "${PROJECT_SHOW_FILE}"
+run lxc project show "${PROJECT_NAME}" > "${PROJECT_SHOW_FILE}"
 python3 - "${PROJECT_SHOW_FILE}" "${PROJECT_ID}" <<'PY'
 import sys
 from pathlib import Path
