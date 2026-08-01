@@ -8,6 +8,7 @@ fi
 
 UPLINK_NETWORK='UPLINK-NAT'
 OVN_MTU='1442'
+IPV4_SUBNET_PREFIX='10.127'
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CLOUD_INIT_FILE="${SCRIPT_DIR}/cloud-init-user-data.yaml"
 
@@ -37,7 +38,7 @@ read -r -p 'Project ID (0-255): ' PROJECT_ID
 NETWORK_NAME="${PROJECT_NAME}"
 PROFILE_LINUX_NAME="${PROJECT_NAME}-linux"
 PROFILE_WIN_NAME="${PROJECT_NAME}-win"
-IPV4_ADDRESS="10.127.${PROJECT_ID}.1/24"
+IPV4_ADDRESS="${IPV4_SUBNET_PREFIX}.${PROJECT_ID}.1/24"
 
 command -v lxc >/dev/null 2>&1 || fail 'lxc command not found in PATH.'
 [[ -f "${CLOUD_INIT_FILE}" ]] || fail "cloud-init file '${CLOUD_INIT_FILE}' not found."
