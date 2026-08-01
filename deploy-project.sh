@@ -51,6 +51,7 @@ lxc project show "${PROJECT_NAME}" >/dev/null 2>&1 && fail "project '${PROJECT_N
 
 echo "Creating project '${PROJECT_NAME}'..."
 run lxc project create "${PROJECT_NAME}"
+run lxc project set "${PROJECT_NAME}" description="Project ID: ${PROJECT_ID}"
 
 run lxc project set "${PROJECT_NAME}" features.images=false
 run lxc project set "${PROJECT_NAME}" features.networks=true
