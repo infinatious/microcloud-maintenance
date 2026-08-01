@@ -51,7 +51,28 @@ lxc project show "${PROJECT_NAME}" >/dev/null 2>&1 && fail "project '${PROJECT_N
 
 echo "Creating project '${PROJECT_NAME}'..."
 run lxc project create "${PROJECT_NAME}"
-run lxc project set "${PROJECT_NAME}" description="Project ID: ${PROJECT_ID}"
+
+PROJECT_SHOW_FILE="$(mktemp)"
+cleanup_project_metadata() {
+  rm -f "${PROJECT_SHOW_FILE}"
+}
+trap 'cleanup_network; cleanup_project_metadata' ERR
+
+run lxc project show "${PROJECT_NAME}" --format yaml > "${PROJECT_SHOW_FILE}"
+python3 - "${PROJECT_SHOW_FILE}" "${PROJECT_ID}" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+path = Path(sys.argv[1])
+project_id = sys.argv[2]
+with path.open() as f:
+    data = yaml.safe_load(f) or {}
+data['description'] = f'Project ID: {project_id}'
+with path.open('w') as f:
+    yaml.safe_dump(data, f, sort_keys=False)
+PY
+lxc project edit "${PROJECT_NAME}" < "${PROJECT_SHOW_FILE}" >/dev/null || fail "unable to update project description for '${PROJECT_NAME}'."
+cleanup_project_metadata
 
 run lxc project set "${PROJECT_NAME}" features.images=false
 run lxc project set "${PROJECT_NAME}" features.networks=true
