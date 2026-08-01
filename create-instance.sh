@@ -23,7 +23,28 @@ require_cmd lxc
 require_cmd jq
 require_cmd python3
 
-read -r -p 'Project name: ' PROJECT_NAME
+mapfile -t PROJECT_OPTIONS < <(
+  lxc project list --format csv -c n 2>/dev/null | while IFS= read -r PROJECT_NAME; do
+    [[ -n "${PROJECT_NAME}" ]] || continue
+    PROJECT_DESCRIPTION="$(lxc project show "${PROJECT_NAME}" 2>/dev/null | awk -F': ' '/^description:/{print $2; exit}')"
+    if [[ "${PROJECT_DESCRIPTION}" =~ ^Project[[:space:]]ID:[[:space:]]([0-9]+)$ ]]; then
+      printf '%s\t%s\n' "${BASH_REMATCH[1]}" "${PROJECT_NAME}"
+    fi
+  done
+)
+(( ${#PROJECT_OPTIONS[@]} > 0 )) || fail 'no projects with project ID metadata were found.'
+
+echo 'Available projects:'
+for PROJECT_ENTRY in "${PROJECT_OPTIONS[@]}"; do
+  IFS=$'\t' read -r PROJECT_ID PROJECT_NAME <<< "${PROJECT_ENTRY}"
+  printf '%2s) %s\n' "${PROJECT_ID}" "${PROJECT_NAME}"
+done
+read -r -p 'Choose project ID: ' SELECTED_PROJECT_ID
+[[ "${SELECTED_PROJECT_ID}" =~ ^[0-9]+$ ]] || fail 'project selection must be numeric.'
+PROJECT_NAME="$(awk -F '\t' -v pid="${SELECTED_PROJECT_ID}" '$1 == pid {print $2}' <<< "$(printf '%s\n' "${PROJECT_OPTIONS[@]}")")"
+[[ -n "${PROJECT_NAME}" ]] || fail "project ID '${SELECTED_PROJECT_ID}' is not available."
+PROJECT_ID="${SELECTED_PROJECT_ID}"
+
 read -r -p 'Environment (p=production, t=test, q=qa, d=dev): ' ENV_CODE
 read -r -p 'Five-character service code: ' SERVICE_CODE
 
