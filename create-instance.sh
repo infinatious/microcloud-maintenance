@@ -132,8 +132,18 @@ esac
 
 PROJECT_ID_STR="${PROJECT_ID}"
 
-mapfile -t IMAGE_ROWS < <(lxc image list --project default --format json | jq -r '.[] | [(.aliases[0].name // "-"), .fingerprint[0:12], .type, .architecture, (.description // "")] | @tsv')
-(( ${#IMAGE_ROWS[@]} > 0 )) || fail 'no images found in the default project.'
+case "${PROFILE_TYPE}" in
+  linux|Linux|l)
+    mapfile -t IMAGE_ROWS < <(lxc image list --project default --format json | jq -r '.[] | select(((.aliases | map(.name // "") | join(" ")) | test("win"; "i")) | not) | [(.aliases[0].name // "-"), .fingerprint[0:12], .type, .architecture, (.description // "")] | @tsv')
+    ;;
+  win|Windows|w)
+    mapfile -t IMAGE_ROWS < <(lxc image list --project default --format json | jq -r '.[] | select((.aliases | map(.name // "") | join(" ")) | test("win"; "i")) | [(.aliases[0].name // "-"), .fingerprint[0:12], .type, .architecture, (.description // "")] | @tsv')
+    ;;
+  *)
+    fail 'profile type must be linux or win.'
+    ;;
+esac
+(( ${#IMAGE_ROWS[@]} > 0 )) || fail "no matching images found for profile '${PROFILE_NAME}'."
 
 echo 'Available images:'
 for i in "${!IMAGE_ROWS[@]}"; do
