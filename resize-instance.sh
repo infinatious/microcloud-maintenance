@@ -147,33 +147,6 @@ fi
 
 UPDATED_IPV4="$(lxc list "${INSTANCE_NAME}" --project "${PROJECT_NAME}" -c 4 -f csv 2>/dev/null | head -n1 || true)"
 [[ -n "${UPDATED_IPV4}" ]] || UPDATED_IPV4="${INSTANCE_IPV4}"
-DESCRIPTION_TEXT="image=${IMAGE_TEXT}; type=${INSTANCE_TYPE}; cpu=${NEW_CPU}; ram=${NEW_RAM}; boot=${NEW_BOOT}; instance_ip=${UPDATED_IPV4:--}; forward_ip=${FORWARD_IP:--}"
-DESC_FILE="$(mktemp)"
-cleanup() {
-  rm -f "${DESC_FILE}"
-}
-trap cleanup EXIT
-lxc config show "${INSTANCE_NAME}" --project "${PROJECT_NAME}" > "${DESC_FILE}"
-python3 - "${DESC_FILE}" "${DESCRIPTION_TEXT}" <<'PY2'
-import sys
-path = sys.argv[1]
-desc = sys.argv[2]
-with open(path) as f:
-    data = f.read().splitlines()
-out = []
-found = False
-for line in data:
-    if line.startswith('description:'):
-        out.append(f'description: {desc}')
-        found = True
-    else:
-        out.append(line)
-if not found:
-    out.insert(0, f'description: {desc}')
-with open(path, 'w') as f:
-    f.write('\n'.join(out) + '\n')
-PY2
-bash -c 'lxc config edit "$1" --project "$2" < "$3"' _ "${INSTANCE_NAME}" "${PROJECT_NAME}" "${DESC_FILE}" || fail "unable to update description field for '${INSTANCE_NAME}'."
 
 echo
 echo 'Resize complete.'
@@ -184,5 +157,5 @@ echo "RAM          : ${NEW_RAM}"
 echo "Boot disk    : ${NEW_BOOT}"
 echo "Instance IP  : ${UPDATED_IPV4:--}"
 echo "Forward IP   : ${FORWARD_IP:--}"
-echo "Description  : ${DESCRIPTION_TEXT}"
+echo "Description  : ${INSTANCE_DESCRIPTION:--}"
 

@@ -202,7 +202,11 @@ run lxc network forward create "${NETWORK_NAME}" --project "${PROJECT_NAME}" --a
 LISTEN_IPV4="$(lxc network forward list "${NETWORK_NAME}" --project "${PROJECT_NAME}" --format json | jq -r --arg target "${INSTANCE_IPV4}" '.[] | select(.config.target_address == $target) | .listen_address' | tail -n1)"
 [[ -n "${LISTEN_IPV4}" && "${LISTEN_IPV4}" != 'null' ]] || fail 'unable to determine allocated forward listen IPv4 address.'
 
-DESCRIPTION_TEXT="image=${SELECTED_ALIAS} (${SELECTED_FP12}); type=${INSTANCE_TYPE}; cpu=${CPU_CORES}; ram=${RAM_GIB}GiB; boot=${DISK_GIB}GiB; instance_ip=${INSTANCE_IPV4}; forward_ip=${LISTEN_IPV4}"
+read -r -p 'Description suffix (optional): ' DESCRIPTION_SUFFIX
+DESCRIPTION_TEXT="${LISTEN_IPV4} ${SELECTED_ALIAS}"
+if [[ -n "${DESCRIPTION_SUFFIX}" ]]; then
+  DESCRIPTION_TEXT="${DESCRIPTION_TEXT} ${DESCRIPTION_SUFFIX}"
+fi
 DESC_FILE="$(mktemp)"
 lxc config show "${INSTANCE_NAME}" --project "${PROJECT_NAME}" > "${DESC_FILE}"
 python3 - "${DESC_FILE}" "${DESCRIPTION_TEXT}" <<'PY'
