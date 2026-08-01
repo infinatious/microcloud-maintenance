@@ -9,6 +9,7 @@ fi
 UPLINK_NETWORK='UPLINK-NAT'
 OVN_MTU='1442'
 IPV4_SUBNET_PREFIX='10.127'
+STORAGE_POOL='zpool'
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CLOUD_INIT_FILE="${SCRIPT_DIR}/cloud-init-user-data.yaml"
 
@@ -42,7 +43,7 @@ IPV4_ADDRESS="${IPV4_SUBNET_PREFIX}.${PROJECT_ID}.1/24"
 
 command -v lxc >/dev/null 2>&1 || fail 'lxc command not found in PATH.'
 [[ -f "${CLOUD_INIT_FILE}" ]] || fail "cloud-init file '${CLOUD_INIT_FILE}' not found."
-lxc storage show zpool >/dev/null 2>&1 || fail "storage pool 'zpool' was not found."
+lxc storage show "${STORAGE_POOL}" >/dev/null 2>&1 || fail "storage pool '${STORAGE_POOL}' was not found."
 lxc network show "${UPLINK_NETWORK}" >/dev/null 2>&1 || fail "uplink network '${UPLINK_NETWORK}' was not found."
 
 lxc network show "${NETWORK_NAME}" >/dev/null 2>&1 && fail "network '${NETWORK_NAME}' already exists."
@@ -98,7 +99,7 @@ devices:
     type: nic
   root:
     path: /
-    pool: zpool
+    pool: ${STORAGE_POOL}
     size: 20GiB
     type: disk
 name: ${PROFILE_LINUX_NAME}
@@ -122,7 +123,7 @@ devices:
     type: nic
   root:
     path: /
-    pool: zpool
+    pool: ${STORAGE_POOL}
     size: 64GiB
     type: disk
 name: ${PROFILE_WIN_NAME}
