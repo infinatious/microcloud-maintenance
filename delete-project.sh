@@ -18,9 +18,8 @@ run() {
 command -v lxc >/dev/null 2>&1 || fail 'lxc command not found in PATH.'
 
 mapfile -t PROJECT_OPTIONS < <(
-  lxc project list --format csv -c n 2>/dev/null | while IFS= read -r PROJECT_NAME; do
+  lxc project list --format csv -c n,d 2>/dev/null | while IFS=',' read -r PROJECT_NAME PROJECT_DESCRIPTION; do
     [[ -n "${PROJECT_NAME}" ]] || continue
-    PROJECT_DESCRIPTION="$(lxc project show "${PROJECT_NAME}" 2>/dev/null | awk -F': ' '/^description:/{print $2; exit}')"
     if [[ "${PROJECT_DESCRIPTION}" =~ ^Project[[:space:]]ID:[[:space:]]([0-9]+)$ ]]; then
       printf '%s\t%s\n' "${BASH_REMATCH[1]}" "${PROJECT_NAME}"
     fi
