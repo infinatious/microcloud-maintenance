@@ -85,8 +85,12 @@ if [[ "${-}" != *i* ]]; then
   return 0
 fi
 
+if [[ -f /etc/os-release ]]; then
+  . /etc/os-release
+fi
+
 OS_NAME="${NAME:-${ID:-unknown}}"
-OS_VERSION="${VERSION:-unknown}"
+OS_VERSION="${VERSION:-${VERSION_ID:-unknown}}"
 HOSTNAME_TEXT="$(hostname)"
 CPU_USAGE=$(top -bn1 2>/dev/null | awk '/^%Cpu/ {usage = $2 + $4 + $6; printf "%.0f", usage; exit}')
 CPU_CAPACITY=$(nproc 2>/dev/null || echo 'unknown')
@@ -98,7 +102,6 @@ PRIMARY_IPV4="$(hostname -I 2>/dev/null | awk '{print $1}')"
 DISK_LINES="$(for path in / /home; do
   info="$(df -hP "${path}" 2>/dev/null | tail -n 1)"
   [[ -n "${info}" ]] || continue
-  fs_name="$(printf '%s\n' "${info}" | awk '{print $1}')"
   usage_pct="$(printf '%s\n' "${info}" | awk '{print $5}')"
   mount_point="$(printf '%s\n' "${info}" | awk '{print $6}')"
   printf '%-20s %5s used\n' "${mount_point}" "${usage_pct}"
@@ -107,8 +110,8 @@ done | awk '!seen[$0]++')"
 MOTD_TMP="$(mktemp)"
 {
   echo -e '\e[38;5;140m############################################################\e[0m'
-  printf '\e[38;5;206m%s %s\e[0m\n' "${OS_NAME}" "${OS_VERSION}"
-  printf '\e[38;5;76mHost %s\e[0m\n' "${HOSTNAME_TEXT}"
+  printf '\e[38;5;206m%s\e[0m\n' "${HOSTNAME_TEXT}"
+  printf '\e[38;5;76m%s %s\e[0m\n' "${OS_NAME}" "${OS_VERSION}"
   printf '\e[38;5;39mCPU %s%% of %s cores\e[0m\n' "${CPU_USAGE:-0}" "${CPU_CAPACITY}"
   printf '\e[38;5;141mRAM %sGB/%sGB\e[0m\n' "${RAM_USED_GB:-0}" "${RAM_TOTAL_GB:-0}"
   printf '\e[38;5;36mIPv4 %s\e[0m\n' "${PRIMARY_IPV4:-unknown}"
@@ -119,9 +122,9 @@ MOTD_TMP="$(mktemp)"
 } > "${MOTD_TMP}"
 
 if command -v sudo >/dev/null 2>&1; then
-  sudo cp "${MOTD_TMP}" /etc/motd
+  sudo install -m 0644 "${MOTD_TMP}" /etc/motd
 else
-  cp "${MOTD_TMP}" /etc/motd
+  install -m 0644 "${MOTD_TMP}" /etc/motd
 fi
 rm -f "${MOTD_TMP}"
 EOF
