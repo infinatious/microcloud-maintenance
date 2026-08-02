@@ -35,6 +35,7 @@ case "${ID,,}" in
     dnf install gcc -y
     dnf install links -y
     dnf install mlocate -y
+    dnf install figlet -y
     dnf install dnf-automatic -y
     sed -i 's/^apply_updates =.*/apply_updates = yes/' /etc/dnf/automatic.conf
     sed -i 's/^download_updates =.*/download_updates = yes/' /etc/dnf/automatic.conf
@@ -45,7 +46,7 @@ case "${ID,,}" in
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
     apt-get upgrade -y
-    apt-get install -y open-vm-tools nfs-common htop vim git wget make gcc links mlocate unattended-upgrades apt-listchanges
+    apt-get install -y open-vm-tools nfs-common htop vim git wget make gcc links mlocate figlet unattended-upgrades apt-listchanges
     cat <<'EOF' > /etc/apt/apt.conf.d/20auto-upgrades
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Download-Upgradeable-Packages "1";
@@ -70,6 +71,52 @@ esac
 
 if command -v updatedb >/dev/null 2>&1; then
   updatedb || true
+fi
+
+cat <<'EOF' > /etc/profile.d/motd-refresh.sh
+#!/usr/bin/env bash
+if command -v figlet >/dev/null 2>&1; then
+  HOSTNAME_ASCII="$(hostname | tr '[:lower:]' '[:upper:]')"
+  ASCII_ART="$(figlet -c "${HOSTNAME_ASCII}" 2>/dev/null || true)"
+else
+  ASCII_ART=''
+fi
+
+CPU_USAGE=$(top -bn1 2>/dev/null | awk '/^%Cpu/ {usage = $2 + $4 + $6; printf "%.0f", usage; exit}')
+CPU_CAPACITY=$(nproc 2>/dev/null || echo 'unknown')
+RAM_TOTAL=$(free -m 2>/dev/null | awk '/^Mem:/ {print $2}')
+RAM_USED=$(free -m 2>/dev/null | awk '/^Mem:/ {print $3}')
+RAM_TOTAL_GB=$(awk -v total="${RAM_TOTAL}" 'BEGIN {printf "%.1f", total / 1024}')
+RAM_USED_GB=$(awk -v used="${RAM_USED}" 'BEGIN {printf "%.1f", used / 1024}')
+PRIMARY_IPV4="$(hostname -I 2>/dev/null | awk '{print $1}')"
+DISK_LINES="$(df -hP / /home 2>/dev/null | awk 'NR>1 {printf "%-20s %5s used\n", $6, $5}')"
+
+{
+  echo '############################################################'
+  if [[ -n "${ASCII_ART}" ]]; then
+    printf '%s\n' "${ASCII_ART}"
+  fi
+  echo "CPU ${CPU_USAGE}% of ${CPU_CAPACITY} cores"
+  echo "RAM ${RAM_USED_GB}GB/${RAM_TOTAL_GB}GB"
+  echo "IPv4 ${PRIMARY_IPV4:-unknown}"
+  echo
+  echo 'Disk usage:'
+  printf '%s\n' "${DISK_LINES}"
+  echo '############################################################'
+} > /etc/motd
+EOF
+chmod 755 /etc/profile.d/motd-refresh.sh
+
+if [[ -f /etc/profile ]]; then
+  grep -q 'motd-refresh.sh' /etc/profile || echo '. /etc/profile.d/motd-refresh.sh' >> /etc/profile
+fi
+
+if [[ -f /etc/bash.bashrc ]]; then
+  grep -q 'motd-refresh.sh' /etc/bash.bashrc || echo '. /etc/profile.d/motd-refresh.sh' >> /etc/bash.bashrc
+fi
+
+if [[ -f /etc/profile.d/motd-refresh.sh ]]; then
+  . /etc/profile.d/motd-refresh.sh
 fi
 
 echo 'Post-install setup complete.'
