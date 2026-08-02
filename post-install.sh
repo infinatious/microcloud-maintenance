@@ -109,8 +109,9 @@ done | awk '!seen[$0]++')"
 
 MOTD_TMP="$(mktemp)"
 {
-  echo -e '\e[38;5;140m############################################################\e[0m'
+  echo -e '\e[38;5;140m##################################################\e[0m'
   printf '\e[38;5;206m%s\e[0m\n' "${HOSTNAME_TEXT}"
+  echo
   printf '\e[38;5;76m%s %s\e[0m\n' "${OS_NAME}" "${OS_VERSION}"
   printf '\e[38;5;39mCPU %s%% of %s cores\e[0m\n' "${CPU_USAGE:-0}" "${CPU_CAPACITY}"
   printf '\e[38;5;141mRAM %sGB/%sGB\e[0m\n' "${RAM_USED_GB:-0}" "${RAM_TOTAL_GB:-0}"
@@ -118,17 +119,27 @@ MOTD_TMP="$(mktemp)"
   echo
   printf '\e[38;5;140mDisk usage:\e[0m\n'
   printf '%s\n' "${DISK_LINES}"
-  echo -e '\e[38;5;140m############################################################\e[0m'
+  echo -e '\e[38;5;140m##################################################\e[0m'
 } > "${MOTD_TMP}"
 
 if command -v sudo >/dev/null 2>&1; then
   sudo install -m 0644 "${MOTD_TMP}" /etc/motd
+  sudo install -m 0644 "${MOTD_TMP}" /run/motd.dynamic
 else
   install -m 0644 "${MOTD_TMP}" /etc/motd
+  install -m 0644 "${MOTD_TMP}" /run/motd.dynamic
 fi
 rm -f "${MOTD_TMP}"
 EOF
 chmod 755 /etc/profile.d/motd-refresh.sh
+
+cat <<'EOF' > /etc/update-motd.d/99-microcloud-motd
+#!/usr/bin/env bash
+if [[ -f /etc/profile.d/motd-refresh.sh ]]; then
+  . /etc/profile.d/motd-refresh.sh
+fi
+EOF
+chmod 755 /etc/update-motd.d/99-microcloud-motd
 
 if [[ -f /etc/profile ]]; then
   grep -q 'motd-refresh.sh' /etc/profile || echo '. /etc/profile.d/motd-refresh.sh' >> /etc/profile
@@ -136,6 +147,10 @@ fi
 
 if [[ -f /etc/bash.bashrc ]]; then
   grep -q 'motd-refresh.sh' /etc/bash.bashrc || echo '. /etc/profile.d/motd-refresh.sh' >> /etc/bash.bashrc
+fi
+
+if [[ -f /usr/bin/update-motd ]]; then
+  /usr/bin/update-motd || true
 fi
 
 if [[ -f /etc/profile.d/motd-refresh.sh ]]; then
