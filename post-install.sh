@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PS1_CUSTOM='PS1='\''\[\e[38;5;140m\][\[\e[38;5;206m\]\t\[\e[0m\] \[\e[38;5;76m\]\u@\[\e[38;5;36;1m\]\h\[\e[0m\] \[\e[38;5;39m\]\w\[\e[38;5;141m\]]\[\e[0m\] '\'''
+PS1_VALUE='\[\e[38;5;140m\][\[\e[38;5;206m\]\t\[\e[0m\] \[\e[38;5;76m\]\u@\[\e[38;5;36;1m\]\h\[\e[0m\] \[\e[38;5;39m\]\w\[\e[38;5;141m\]]\[\e[0m\] '
 
 if [[ -d /home/kauffpc ]]; then
   BASHRC_FILE="/home/kauffpc/.bashrc"
-  if ! grep -q 'PS1_CUSTOM=' "${BASHRC_FILE}" 2>/dev/null; then
-    printf '%s\n' "${PS1_CUSTOM}" 'eval "${PS1_CUSTOM}"' >> "${BASHRC_FILE}"
+  if ! grep -q '^PS1=' "${BASHRC_FILE}" 2>/dev/null; then
+    printf "%s\n" "PS1='${PS1_VALUE}'" >> "${BASHRC_FILE}"
     chown kauffpc:kauffpc "${BASHRC_FILE}"
   fi
 fi
