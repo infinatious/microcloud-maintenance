@@ -42,7 +42,6 @@ case "${ID,,}" in
     dnf install make -y
     dnf install gcc -y
     dnf install links -y
-    dnf install figlet -y
     dnf install dnf-automatic -y
     sed -i 's/^apply_updates =.*/apply_updates = yes/' /etc/dnf/automatic.conf
     sed -i 's/^download_updates =.*/download_updates = yes/' /etc/dnf/automatic.conf
@@ -53,7 +52,7 @@ case "${ID,,}" in
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
     apt-get upgrade -y
-    apt-get install -y open-vm-tools nfs-common htop btop vim git wget make gcc links figlet unattended-upgrades apt-listchanges
+    apt-get install -y open-vm-tools nfs-common htop btop vim git wget make gcc links unattended-upgrades apt-listchanges
     cat <<'EOF' > /etc/apt/apt.conf.d/20auto-upgrades
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Download-Upgradeable-Packages "1";
@@ -86,33 +85,9 @@ if [[ "${-}" != *i* ]]; then
   return 0
 fi
 
-gradient_text() {
-  local input="$1"
-  local palette=(140 145 150 155 160 165 170 175 180 185 190 195 200 205 206 201 196 191 186 181 176 171 166 161 156 151 146 141)
-  local char color
-  local i=0
-  local idx=0
-
-  while (( i < ${#input} )); do
-    char="${input:i:1}"
-    if [[ "${char}" == $'\n' ]]; then
-      printf '\n'
-    else
-      color="${palette[$((idx % ${#palette[@]}))]}"
-      printf '\e[38;5;%sm%s\e[0m' "${color}" "${char}"
-      ((idx++))
-    fi
-    ((i++))
-  done
-}
-
-if command -v figlet >/dev/null 2>&1; then
-  HOSTNAME_ASCII="$(hostname | tr '[:lower:]' '[:upper:]')"
-  ASCII_ART="$(figlet -f big -c "${HOSTNAME_ASCII}" 2>/dev/null || true)"
-else
-  ASCII_ART=''
-fi
-
+OS_NAME="${NAME:-${ID:-unknown}}"
+OS_VERSION="${VERSION:-unknown}"
+HOSTNAME_TEXT="$(hostname)"
 CPU_USAGE=$(top -bn1 2>/dev/null | awk '/^%Cpu/ {usage = $2 + $4 + $6; printf "%.0f", usage; exit}')
 CPU_CAPACITY=$(nproc 2>/dev/null || echo 'unknown')
 RAM_TOTAL=$(free -m 2>/dev/null | awk '/^Mem:/ {print $2}')
@@ -120,20 +95,25 @@ RAM_USED=$(free -m 2>/dev/null | awk '/^Mem:/ {print $3}')
 RAM_TOTAL_GB=$(awk -v total="${RAM_TOTAL}" 'BEGIN {printf "%.1f", total / 1024}')
 RAM_USED_GB=$(awk -v used="${RAM_USED}" 'BEGIN {printf "%.1f", used / 1024}')
 PRIMARY_IPV4="$(hostname -I 2>/dev/null | awk '{print $1}')"
-DISK_LINES="$(df -hP / /home 2>/dev/null | awk 'NR>1 {printf "%-20s %5s used\n", $6, $5}')"
+DISK_LINES="$(for path in / /home; do
+  info="$(df -hP "${path}" 2>/dev/null | tail -n 1)"
+  [[ -n "${info}" ]] || continue
+  fs_name="$(printf '%s\n' "${info}" | awk '{print $1}')"
+  usage_pct="$(printf '%s\n' "${info}" | awk '{print $5}')"
+  mount_point="$(printf '%s\n' "${info}" | awk '{print $6}')"
+  printf '%-20s %5s used\n' "${mount_point}" "${usage_pct}"
+done | awk '!seen[$0]++')"
 
 MOTD_TMP="$(mktemp)"
 {
   echo -e '\e[38;5;140m############################################################\e[0m'
-  if [[ -n "${ASCII_ART}" ]]; then
-    gradient_text "${ASCII_ART}"
-    echo
-  fi
-  printf '\e[38;5;206mCPU %s%% of %s cores\e[0m\n' "${CPU_USAGE:-0}" "${CPU_CAPACITY}"
-  printf '\e[38;5;76mRAM %sGB/%sGB\e[0m\n' "${RAM_USED_GB:-0}" "${RAM_TOTAL_GB:-0}"
-  printf '\e[38;5;39mIPv4 %s\e[0m\n' "${PRIMARY_IPV4:-unknown}"
+  printf '\e[38;5;206m%s %s\e[0m\n' "${OS_NAME}" "${OS_VERSION}"
+  printf '\e[38;5;76mHost %s\e[0m\n' "${HOSTNAME_TEXT}"
+  printf '\e[38;5;39mCPU %s%% of %s cores\e[0m\n' "${CPU_USAGE:-0}" "${CPU_CAPACITY}"
+  printf '\e[38;5;141mRAM %sGB/%sGB\e[0m\n' "${RAM_USED_GB:-0}" "${RAM_TOTAL_GB:-0}"
+  printf '\e[38;5;36mIPv4 %s\e[0m\n' "${PRIMARY_IPV4:-unknown}"
   echo
-  printf '\e[38;5;141mDisk usage:\e[0m\n'
+  printf '\e[38;5;140mDisk usage:\e[0m\n'
   printf '%s\n' "${DISK_LINES}"
   echo -e '\e[38;5;140m############################################################\e[0m'
 } > "${MOTD_TMP}"
