@@ -16,8 +16,8 @@ On the MicroCloud host, ensure the following are available:
 
 The scripts in this repository assume that:
 
-- the host has an available storage pool named `zpool`
-- an uplink physical network named `UPLINK-NAT` already exists
+- the host has an available storage pool named `zpool` (can be changed in deploy-project.sh)
+- an uplink physical network named `UPLINK-NAT` already exists (can be changed in deploy-project.sh)
 - the `default` project is available for image discovery
 
 ### 2. Create the network uplink
@@ -35,7 +35,7 @@ In practice, that means:
 
 The important idea is that `UPLINK-NAT` should represent a real physical uplink path, not an isolated bridge or a private virtual network.
 
-A typical configuration pattern looks like this conceptually:
+A typical configuration pattern looks like this conceptually, using an uplink network of 192.168.232.0/21:
 
 ```yaml
 access_entitlements:
@@ -46,10 +46,10 @@ name: UPLINK-NAT
 description: ''
 type: physical
 config:
-  dns.nameservers: <your DNS servers>
-  ipv4.gateway: <uplink gateway>/prefix
-  ipv4.routes: <additional routed subnets>
-  ipv4.ovn.ranges: <reserved OVN IP range>
+  dns.nameservers: 1.1.1.1,9.9.9.9
+  ipv4.gateway: 192.168.232.1/21
+  ipv4.routes: 192.168.233.0/24,192.168.234.0/24,192.168.235.0/24,192.168.236.0/24, 192.168.237.0/24, 192.168.238.0/24, 192.168.239.0/24, 192.168.232.128/25
+  ipv4.ovn.ranges: 192.168.232.2-192.168.232.127
 ```
 
 Use values that match your site network planning. The exact address block should be chosen to fit the external network that the host is attached to.
