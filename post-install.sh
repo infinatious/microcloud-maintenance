@@ -5,10 +5,17 @@ PS1_VALUE='\[\e[38;5;140m\][\[\e[38;5;206m\]\t\[\e[0m\] \[\e[38;5;76m\]\u@\[\e[3
 
 if [[ -d /home/kauffpc ]]; then
   BASHRC_FILE="/home/kauffpc/.bashrc"
-  if ! grep -q '^PS1=' "${BASHRC_FILE}" 2>/dev/null; then
-    printf "%s\n" "PS1='${PS1_VALUE}'" >> "${BASHRC_FILE}"
-    chown kauffpc:kauffpc "${BASHRC_FILE}"
+  PROFILE_FILE="/home/kauffpc/.profile"
+  if ! grep -q 'MICROCLOUD_CUSTOM_PS1' "${BASHRC_FILE}" 2>/dev/null; then
+    cat <<'EOF' >> "${BASHRC_FILE}"
+# MICROCLOUD_CUSTOM_PS1
+PS1='\[\e[38;5;140m\][\[\e[38;5;206m\]\t\[\e[0m\] \[\e[38;5;76m\]\u@\[\e[38;5;36;1m\]\h\[\e[0m\] \[\e[38;5;39m\]\w\[\e[38;5;141m\]]\[\e[0m\] '
+EOF
   fi
+  if ! grep -q 'MICROCLOUD_CUSTOM_PS1' "${PROFILE_FILE}" 2>/dev/null; then
+    printf '%s\n' '# MICROCLOUD_CUSTOM_PS1' "PS1='${PS1_VALUE}'" >> "${PROFILE_FILE}"
+  fi
+  chown kauffpc:kauffpc "${BASHRC_FILE}" "${PROFILE_FILE}"
 fi
 
 if [[ -f /etc/os-release ]]; then
@@ -34,7 +41,6 @@ case "${ID,,}" in
     dnf install make -y
     dnf install gcc -y
     dnf install links -y
-    dnf install mlocate -y
     dnf install figlet -y
     dnf install dnf-automatic -y
     sed -i 's/^apply_updates =.*/apply_updates = yes/' /etc/dnf/automatic.conf
@@ -46,7 +52,7 @@ case "${ID,,}" in
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
     apt-get upgrade -y
-    apt-get install -y open-vm-tools nfs-common htop vim git wget make gcc links mlocate figlet unattended-upgrades apt-listchanges
+    apt-get install -y open-vm-tools nfs-common htop vim git wget make gcc links figlet unattended-upgrades apt-listchanges
     cat <<'EOF' > /etc/apt/apt.conf.d/20auto-upgrades
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Download-Upgradeable-Packages "1";
@@ -75,9 +81,33 @@ fi
 
 cat <<'EOF' > /etc/profile.d/motd-refresh.sh
 #!/usr/bin/env bash
+if [[ "${-}" != *i* ]]; then
+  return 0
+fi
+
+gradient_text() {
+  local input="$1"
+  local palette=(140 145 150 155 160 165 170 175 180 185 190 195 200 205 206 201 196 191 186 181 176 171 166 161 156 151 146 141)
+  local char color
+  local i=0
+  local idx=0
+
+  while (( i < ${#input} )); do
+    char="${input:i:1}"
+    if [[ "${char}" == $'\n' ]]; then
+      printf '\n'
+    else
+      color="${palette[$((idx % ${#palette[@]}))]}"
+      printf '\e[38;5;%sm%s\e[0m' "${color}" "${char}"
+      ((idx++))
+    fi
+    ((i++))
+  done
+}
+
 if command -v figlet >/dev/null 2>&1; then
   HOSTNAME_ASCII="$(hostname | tr '[:lower:]' '[:upper:]')"
-  ASCII_ART="$(figlet -c "${HOSTNAME_ASCII}" 2>/dev/null || true)"
+  ASCII_ART="$(figlet -f big -c "${HOSTNAME_ASCII}" 2>/dev/null || true)"
 else
   ASCII_ART=''
 fi
@@ -91,19 +121,28 @@ RAM_USED_GB=$(awk -v used="${RAM_USED}" 'BEGIN {printf "%.1f", used / 1024}')
 PRIMARY_IPV4="$(hostname -I 2>/dev/null | awk '{print $1}')"
 DISK_LINES="$(df -hP / /home 2>/dev/null | awk 'NR>1 {printf "%-20s %5s used\n", $6, $5}')"
 
+MOTD_TMP="$(mktemp)"
 {
-  echo '############################################################'
+  echo -e '\e[38;5;140m############################################################\e[0m'
   if [[ -n "${ASCII_ART}" ]]; then
-    printf '%s\n' "${ASCII_ART}"
+    gradient_text "${ASCII_ART}"
+    echo
   fi
-  echo "CPU ${CPU_USAGE}% of ${CPU_CAPACITY} cores"
-  echo "RAM ${RAM_USED_GB}GB/${RAM_TOTAL_GB}GB"
-  echo "IPv4 ${PRIMARY_IPV4:-unknown}"
+  printf '\e[38;5;206mCPU %s%% of %s cores\e[0m\n' "${CPU_USAGE:-0}" "${CPU_CAPACITY}"
+  printf '\e[38;5;76mRAM %sGB/%sGB\e[0m\n' "${RAM_USED_GB:-0}" "${RAM_TOTAL_GB:-0}"
+  printf '\e[38;5;39mIPv4 %s\e[0m\n' "${PRIMARY_IPV4:-unknown}"
   echo
-  echo 'Disk usage:'
+  printf '\e[38;5;141mDisk usage:\e[0m\n'
   printf '%s\n' "${DISK_LINES}"
-  echo '############################################################'
-} > /etc/motd
+  echo -e '\e[38;5;140m############################################################\e[0m'
+} > "${MOTD_TMP}"
+
+if command -v sudo >/dev/null 2>&1; then
+  sudo cp "${MOTD_TMP}" /etc/motd
+else
+  cp "${MOTD_TMP}" /etc/motd
+fi
+rm -f "${MOTD_TMP}"
 EOF
 chmod 755 /etc/profile.d/motd-refresh.sh
 
