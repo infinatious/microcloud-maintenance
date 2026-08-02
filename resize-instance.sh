@@ -131,6 +131,7 @@ read -r -p 'Type yes to apply these changes: ' CONFIRM
 [[ "${CONFIRM}" == 'yes' ]] || fail 'resize cancelled.'
 
 WAS_RUNNING=0
+RESTART_NEEDED=0
 if [[ "${INSTANCE_STATE}" == 'RUNNING' ]]; then
   WAS_RUNNING=1
 fi
@@ -140,6 +141,7 @@ if [[ "${CURRENT_BOOT}" != "${NEW_BOOT}" && ${WAS_RUNNING} -eq 1 ]]; then
   [[ "${STOP_CONFIRM}" == 'yes' ]] || fail 'resize cancelled because the instance must be powered off for boot disk changes.'
   echo "Stopping instance '${INSTANCE_NAME}' for root disk resize..."
   run lxc stop "${INSTANCE_NAME}" --project "${PROJECT_NAME}"
+  RESTART_NEEDED=1
 elif [[ "${CURRENT_BOOT}" != "${NEW_BOOT}" ]]; then
   echo "Instance '${INSTANCE_NAME}' is already stopped for boot disk resize."
 fi
@@ -157,7 +159,7 @@ else
   run lxc config device override "${INSTANCE_NAME}" root size="${NEW_BOOT}" --project "${PROJECT_NAME}"
 fi
 
-if (( WAS_RUNNING == 1 )); then
+if (( RESTART_NEEDED == 1 )); then
   echo "Starting instance '${INSTANCE_NAME}'..."
   run lxc start "${INSTANCE_NAME}" --project "${PROJECT_NAME}"
 fi
