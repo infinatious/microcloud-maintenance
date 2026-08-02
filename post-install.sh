@@ -35,6 +35,7 @@ case "${ID,,}" in
     dnf install open-vm-tools -y
     dnf install nfs-utils -y
     dnf install htop -y
+    dnf install btop -y
     dnf install vim-enhanced -y
     dnf install git -y
     dnf install wget -y
@@ -52,7 +53,7 @@ case "${ID,,}" in
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
     apt-get upgrade -y
-    apt-get install -y open-vm-tools nfs-common htop vim git wget make gcc links figlet unattended-upgrades apt-listchanges
+    apt-get install -y open-vm-tools nfs-common htop btop vim git wget make gcc links figlet unattended-upgrades apt-listchanges
     cat <<'EOF' > /etc/apt/apt.conf.d/20auto-upgrades
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Download-Upgradeable-Packages "1";
