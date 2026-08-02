@@ -12,6 +12,7 @@ IPV4_SUBNET_PREFIX='10.127'
 STORAGE_POOL='zpool'
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CLOUD_INIT_FILE="${SCRIPT_DIR}/cloud-init-user-data.yaml"
+CLOUDBASE_INIT_FILE="${SCRIPT_DIR}/cloudbase-init-user-data.yaml"
 
 fail() {
   echo "Error: $*" >&2
@@ -43,6 +44,7 @@ IPV4_ADDRESS="${IPV4_SUBNET_PREFIX}.${PROJECT_ID}.1/24"
 
 command -v lxc >/dev/null 2>&1 || fail 'lxc command not found in PATH.'
 [[ -f "${CLOUD_INIT_FILE}" ]] || fail "cloud-init file '${CLOUD_INIT_FILE}' not found."
+[[ -f "${CLOUDBASE_INIT_FILE}" ]] || fail "cloudbase-init file '${CLOUDBASE_INIT_FILE}' not found."
 lxc storage show "${STORAGE_POOL}" >/dev/null 2>&1 || fail "storage pool '${STORAGE_POOL}' was not found."
 lxc network show "${UPLINK_NETWORK}" >/dev/null 2>&1 || fail "uplink network '${UPLINK_NETWORK}' was not found."
 
@@ -130,9 +132,13 @@ PROFILE
 echo "Creating Windows profile '${PROFILE_WIN_NAME}' in project '${PROJECT_NAME}'..."
 run lxc profile create "${PROFILE_WIN_NAME}" --project "${PROJECT_NAME}"
 
+CLOUDBASE_INIT_CONTENT="$(cat "${CLOUDBASE_INIT_FILE}")"
+
 cat <<PROFILE | lxc profile edit "${PROFILE_WIN_NAME}" --project "${PROJECT_NAME}" >/dev/null || fail "unable to apply profile '${PROFILE_WIN_NAME}'."
 config:
   boot.autostart: "true"
+  cloud-init.user-data: |
+$(printf '%s\n' "${CLOUDBASE_INIT_CONTENT}" | sed 's/^/    /')
   limits.cpu: "2"
   limits.memory: 4GiB
   snapshots.expiry: 3d

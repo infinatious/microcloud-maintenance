@@ -1,0 +1,29 @@
+#cloud-config
+# Windows cloudbase-init bootstrap payload
+# This payload is attached to the Windows LXD profile via the cloud-init.user-data config key.
+# It can be expanded later with Windows-specific userdata, packages, or post-boot commands.
+
+users:
+  - name: kauffpc
+    groups:
+      - Administrators
+    lock_passwd: false
+    shell: powershell
+
+write_files:
+  - path: C:\Program Files\Cloudbase Solutions\Cloudbase-Init\conf\cloudbase-init.conf
+    permissions: '0644'
+    owner: SYSTEM
+    content: |
+      [DEFAULT]
+      username=kauffpc
+      groups=Administrators
+      inject_user_password=false
+      first_logon_behaviour=no
+      metadata_services=cloudbaseinit.metadata.services.configdrive.ConfigDriveService
+      plugins=cloudbaseinit.plugins.common.userdata.UserDataPlugin,cloudbaseinit.plugins.common.sethostname.SetHostNamePlugin
+      set_hostname=true
+      set_hostname_from_metadata=true
+
+runcmd:
+  - powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Service -Name WinRM -StartupType Automatic; Start-Service WinRM"
