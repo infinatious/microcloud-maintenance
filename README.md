@@ -165,9 +165,16 @@ Examples:
 
 ```bash
 ./delete-project.sh --project-id 42
+./delete-project.sh --project-id 42 --delete-instances --yes
 ```
 
-A delete run will still refuse to proceed if the project still contains instances.
+Supported arguments:
+
+- `--project-id` selects the project by numeric project ID.
+- `--delete-instances` stops and deletes every instance in the project before the project itself is removed.
+- `--yes` skips the confirmation prompt for the instance cleanup.
+
+A normal delete run will still refuse to proceed if the project still contains instances unless you pass `--delete-instances`.
 
 ### Deployment flow
 

@@ -13,14 +13,17 @@ fail() {
 
 usage() {
   cat <<'EOF'
-Usage: delete-project.sh --project-id ID
+Usage: delete-project.sh --project-id ID [--delete-instances] [--yes]
 
 Options:
-  --project-id ID   Numeric project ID to select the project to delete.
-  --help            Show this help message.
+  --project-id ID        Numeric project ID to select the project to delete.
+  --delete-instances     Stop and delete every instance in the project before deleting the project.
+  --yes                  Skip the confirmation prompt for the instance cleanup.
+  --help                 Show this help message.
 
 Examples:
   ./delete-project.sh --project-id 42
+  ./delete-project.sh --project-id 42 --delete-instances --yes
 EOF
 }
 
@@ -29,12 +32,22 @@ run() {
 }
 
 PROJECT_ID_ARG=''
+DELETE_INSTANCES_ARG=''
+CONFIRM_ARG=''
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --project-id)
       [[ $# -ge 2 ]] || fail 'missing value for --project-id.'
       PROJECT_ID_ARG="$2"
       shift 2
+      ;;
+    --delete-instances)
+      DELETE_INSTANCES_ARG='yes'
+      shift
+      ;;
+    --yes)
+      CONFIRM_ARG='yes'
+      shift
       ;;
     --help|-h)
       usage
@@ -79,10 +92,32 @@ lxc project show "${PROJECT_NAME}" >/dev/null 2>&1 || fail "project '${PROJECT_N
 
 INSTANCE_LIST="$(lxc list --project "${PROJECT_NAME}" --format csv -c n 2>/dev/null || true)"
 if [[ -n "${INSTANCE_LIST}" ]]; then
-  echo "Project '${PROJECT_NAME}' still has instances:" >&2
-  printf '%s\n' "${INSTANCE_LIST}" >&2
-  echo 'Delete the instances first, then re-run this script.' >&2
-  exit 1
+  if [[ "${DELETE_INSTANCES_ARG}" == 'yes' ]]; then
+    if [[ "${CONFIRM_ARG}" != 'yes' ]]; then
+      echo "Project '${PROJECT_NAME}' still has instances:" >&2
+      printf '%s\n' "${INSTANCE_LIST}" >&2
+      read -r -p 'Type yes to stop and delete all instances in this project before continuing: ' CONFIRM
+      [[ "${CONFIRM}" == 'yes' ]] || fail 'project deletion cancelled.'
+    fi
+
+    while IFS= read -r INSTANCE_NAME; do
+      [[ -n "${INSTANCE_NAME}" ]] || continue
+      FORWARD_IP="$(lxc config get "${INSTANCE_NAME}" user.network_forward_ipv4 --project "${PROJECT_NAME}" 2>/dev/null || true)"
+      echo "Stopping instance '${INSTANCE_NAME}'..."
+      lxc stop "${INSTANCE_NAME}" --project "${PROJECT_NAME}" >/dev/null 2>&1 || true
+      echo "Deleting instance '${INSTANCE_NAME}'..."
+      run lxc delete "${INSTANCE_NAME}" --project "${PROJECT_NAME}"
+      if [[ -n "${FORWARD_IP}" ]]; then
+        echo "Deleting forward '${FORWARD_IP}' on network '${NETWORK_NAME}'..."
+        run lxc network forward delete "${NETWORK_NAME}" "${FORWARD_IP}" --project "${PROJECT_NAME}"
+      fi
+    done < <(printf '%s\n' "${INSTANCE_LIST}" | sed '/^$/d')
+  else
+    echo "Project '${PROJECT_NAME}' still has instances:" >&2
+    printf '%s\n' "${INSTANCE_LIST}" >&2
+    echo 'Delete the instances first, then re-run this script.' >&2
+    exit 1
+  fi
 fi
 
 mapfile -t PROFILE_NAMES < <(lxc profile list --project "${PROJECT_NAME}" --format csv -c n 2>/dev/null || true)
