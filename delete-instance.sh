@@ -11,6 +11,21 @@ fail() {
   exit 1
 }
 
+usage() {
+  cat <<'EOF'
+Usage: delete-instance.sh --project-id ID [--instance-index N] [--yes]
+
+Options:
+  --project-id ID       Numeric project ID to select the project.
+  --instance-index N    Numeric instance list index (1-based) to delete.
+  --yes                 Skip the confirmation prompt.
+  --help                Show this help message.
+
+Examples:
+  ./delete-instance.sh --project-id 42 --instance-index 2 --yes
+EOF
+}
+
 run() {
   "$@" || fail "command failed: $*"
 }
@@ -18,6 +33,35 @@ run() {
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "required command '$1' not found in PATH."
 }
+
+PROJECT_ID_ARG=''
+INSTANCE_INDEX_ARG=''
+CONFIRM_ARG=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project-id)
+      [[ $# -ge 2 ]] || fail 'missing value for --project-id.'
+      PROJECT_ID_ARG="$2"
+      shift 2
+      ;;
+    --instance-index)
+      [[ $# -ge 2 ]] || fail 'missing value for --instance-index.'
+      INSTANCE_INDEX_ARG="$2"
+      shift 2
+      ;;
+    --yes)
+      CONFIRM_ARG='yes'
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1"
+      ;;
+  esac
+done
 
 require_cmd lxc
 
@@ -36,7 +80,11 @@ for PROJECT_ENTRY in "${PROJECT_OPTIONS[@]}"; do
   IFS=$'\t' read -r PROJECT_ID PROJECT_NAME <<< "${PROJECT_ENTRY}"
   printf '%2s) %s\n' "${PROJECT_ID}" "${PROJECT_NAME}"
 done
-read -r -p 'Choose project ID: ' SELECTED_PROJECT_ID
+if [[ -n "${PROJECT_ID_ARG}" ]]; then
+  SELECTED_PROJECT_ID="${PROJECT_ID_ARG}"
+else
+  read -r -p 'Choose project ID: ' SELECTED_PROJECT_ID
+fi
 [[ "${SELECTED_PROJECT_ID}" =~ ^[0-9]+$ ]] || fail 'project selection must be numeric.'
 PROJECT_NAME="$(awk -F '\t' -v pid="${SELECTED_PROJECT_ID}" '$1 == pid {print $2}' <<< "$(printf '%s\n' "${PROJECT_OPTIONS[@]}")")"
 [[ -n "${PROJECT_NAME}" ]] || fail "project ID '${SELECTED_PROJECT_ID}' is not available."
@@ -54,7 +102,11 @@ for i in "${!INSTANCE_ROWS[@]}"; do
 ' "$((i + 1))" "$NAME" "${STATE:-unknown}" "${IPV4:--}" "${DESCRIPTION:--}"
 done
 
-read -r -p 'Enter instance number to delete: ' INSTANCE_INDEX
+if [[ -n "${INSTANCE_INDEX_ARG}" ]]; then
+  INSTANCE_INDEX="${INSTANCE_INDEX_ARG}"
+else
+  read -r -p 'Enter instance number to delete: ' INSTANCE_INDEX
+fi
 [[ "${INSTANCE_INDEX}" =~ ^[0-9]+$ ]] || fail 'instance selection must be numeric.'
 (( INSTANCE_INDEX >= 1 && INSTANCE_INDEX <= ${#INSTANCE_ROWS[@]} )) || fail 'instance selection is out of range.'
 
@@ -72,7 +124,11 @@ if [[ -n "${FORWARD_IP}" ]]; then
   echo "Forward IP  : ${FORWARD_IP}"
 fi
 
-read -r -p 'Are you sure you want to stop and delete this instance? Type yes to continue: ' CONFIRM
+if [[ -n "${CONFIRM_ARG}" ]]; then
+  CONFIRM='yes'
+else
+  read -r -p 'Are you sure you want to stop and delete this instance? Type yes to continue: ' CONFIRM
+fi
 [[ "${CONFIRM}" == 'yes' ]] || fail 'deletion cancelled.'
 
 echo "Stopping instance '${INSTANCE_NAME}'..."

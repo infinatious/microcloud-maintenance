@@ -11,6 +11,30 @@ fail() {
   exit 1
 }
 
+usage() {
+  cat <<'EOF'
+Usage: create-instance.sh --project-id ID --environment ENV --service-code CODE --profile-type TYPE [--cpu N] [--ram GIB] [--disk GIB] [--image-index N] [--image-alias NAME] [--description-suffix TEXT]
+
+Options:
+  --project-id ID          Numeric project ID to select the project.
+  --environment ENV        Environment code: p, t, q, or d.
+  --service-code CODE      Five-character service code (alphanumeric).
+  --profile-type TYPE      Profile family: linux or win.
+  --cpu N                  Override CPU core count.
+  --ram GIB                Override RAM size in GiB.
+  --disk GIB               Override boot disk size in GiB.
+  --image-index N          Pick the desired image by the displayed list index.
+  --image-alias NAME       Pick an image by exact alias name.
+  --description-suffix TEXT
+                           Optional suffix appended to the generated description.
+  --help                   Show this help message.
+
+Examples:
+  ./create-instance.sh --project-id 42 --environment p --service-code demo1 --profile-type linux --cpu 2 --ram 4 --disk 20 --image-index 3
+  ./create-instance.sh --project-id 42 --environment d --service-code svc01 --profile-type win --image-alias ubuntu --description-suffix 'site-a'
+EOF
+}
+
 run() {
   "$@" || fail "command failed: $*"
 }
@@ -18,6 +42,78 @@ run() {
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "required command '$1' not found in PATH."
 }
+
+PROJECT_ID_ARG=''
+ENV_CODE_ARG=''
+SERVICE_CODE_ARG=''
+PROFILE_TYPE_ARG=''
+CPU_ARG=''
+RAM_ARG=''
+DISK_ARG=''
+IMAGE_INDEX_ARG=''
+IMAGE_ALIAS_ARG=''
+DESCRIPTION_SUFFIX_ARG=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project-id)
+      [[ $# -ge 2 ]] || fail 'missing value for --project-id.'
+      PROJECT_ID_ARG="$2"
+      shift 2
+      ;;
+    --environment)
+      [[ $# -ge 2 ]] || fail 'missing value for --environment.'
+      ENV_CODE_ARG="$2"
+      shift 2
+      ;;
+    --service-code)
+      [[ $# -ge 2 ]] || fail 'missing value for --service-code.'
+      SERVICE_CODE_ARG="$2"
+      shift 2
+      ;;
+    --profile-type)
+      [[ $# -ge 2 ]] || fail 'missing value for --profile-type.'
+      PROFILE_TYPE_ARG="$2"
+      shift 2
+      ;;
+    --cpu)
+      [[ $# -ge 2 ]] || fail 'missing value for --cpu.'
+      CPU_ARG="$2"
+      shift 2
+      ;;
+    --ram)
+      [[ $# -ge 2 ]] || fail 'missing value for --ram.'
+      RAM_ARG="$2"
+      shift 2
+      ;;
+    --disk)
+      [[ $# -ge 2 ]] || fail 'missing value for --disk.'
+      DISK_ARG="$2"
+      shift 2
+      ;;
+    --image-index)
+      [[ $# -ge 2 ]] || fail 'missing value for --image-index.'
+      IMAGE_INDEX_ARG="$2"
+      shift 2
+      ;;
+    --image-alias)
+      [[ $# -ge 2 ]] || fail 'missing value for --image-alias.'
+      IMAGE_ALIAS_ARG="$2"
+      shift 2
+      ;;
+    --description-suffix)
+      [[ $# -ge 2 ]] || fail 'missing value for --description-suffix.'
+      DESCRIPTION_SUFFIX_ARG="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1"
+      ;;
+  esac
+done
 
 require_cmd lxc
 require_cmd jq
@@ -38,14 +134,26 @@ for PROJECT_ENTRY in "${PROJECT_OPTIONS[@]}"; do
   IFS=$'\t' read -r PROJECT_ID PROJECT_NAME <<< "${PROJECT_ENTRY}"
   printf '%2s) %s\n' "${PROJECT_ID}" "${PROJECT_NAME}"
 done
-read -r -p 'Choose project ID: ' SELECTED_PROJECT_ID
+if [[ -n "${PROJECT_ID_ARG}" ]]; then
+  SELECTED_PROJECT_ID="${PROJECT_ID_ARG}"
+else
+  read -r -p 'Choose project ID: ' SELECTED_PROJECT_ID
+fi
 [[ "${SELECTED_PROJECT_ID}" =~ ^[0-9]+$ ]] || fail 'project selection must be numeric.'
 PROJECT_NAME="$(awk -F '\t' -v pid="${SELECTED_PROJECT_ID}" '$1 == pid {print $2}' <<< "$(printf '%s\n' "${PROJECT_OPTIONS[@]}")")"
 [[ -n "${PROJECT_NAME}" ]] || fail "project ID '${SELECTED_PROJECT_ID}' is not available."
 PROJECT_ID="${SELECTED_PROJECT_ID}"
 
-read -r -p 'Environment (p=production, t=test, q=qa, d=dev): ' ENV_CODE
-read -r -p 'Five-character service code: ' SERVICE_CODE
+if [[ -n "${ENV_CODE_ARG}" ]]; then
+  ENV_CODE="${ENV_CODE_ARG}"
+else
+  read -r -p 'Environment (p=production, t=test, q=qa, d=dev): ' ENV_CODE
+fi
+if [[ -n "${SERVICE_CODE_ARG}" ]]; then
+  SERVICE_CODE="${SERVICE_CODE_ARG}"
+else
+  read -r -p 'Five-character service code: ' SERVICE_CODE
+fi
 
 [[ -n "${PROJECT_NAME}" ]] || fail 'project name cannot be empty.'
 [[ "${SERVICE_CODE}" =~ ^[A-Za-z0-9]{5}$ ]] || fail 'service code must be exactly 5 alphanumeric characters.'
@@ -54,7 +162,11 @@ PROFILE_TYPE=''
 PROFILE_NAME=''
 NETWORK_NAME="${PROJECT_NAME}"
 
-read -r -p 'Profile type to use (linux or win): ' PROFILE_TYPE
+if [[ -n "${PROFILE_TYPE_ARG}" ]]; then
+  PROFILE_TYPE="${PROFILE_TYPE_ARG}"
+else
+  read -r -p 'Profile type to use (linux or win): ' PROFILE_TYPE
+fi
 case "${PROFILE_TYPE}" in
   linux|Linux|l)
     PROFILE_NAME="${PROJECT_NAME}-linux"
@@ -113,11 +225,23 @@ print(size.replace('GiB', '').replace('G', '').replace('i', '').replace('B', '')
 PY
 )"
 
-read -r -p "CPU cores [${PROFILE_CPU_CORES}]: " CPU_CORES
+if [[ -n "${CPU_ARG}" ]]; then
+  CPU_CORES="${CPU_ARG}"
+else
+  read -r -p "CPU cores [${PROFILE_CPU_CORES}]: " CPU_CORES
+fi
 CPU_CORES="${CPU_CORES:-${PROFILE_CPU_CORES}}"
-read -r -p "RAM (GiB, number only) [${PROFILE_RAM_GIB}]: " RAM_GIB
+if [[ -n "${RAM_ARG}" ]]; then
+  RAM_GIB="${RAM_ARG}"
+else
+  read -r -p "RAM (GiB, number only) [${PROFILE_RAM_GIB}]: " RAM_GIB
+fi
 RAM_GIB="${RAM_GIB:-${PROFILE_RAM_GIB}}"
-read -r -p "Boot disk size (GiB, number only) [${PROFILE_DISK_GIB}]: " DISK_GIB
+if [[ -n "${DISK_ARG}" ]]; then
+  DISK_GIB="${DISK_ARG}"
+else
+  read -r -p "Boot disk size (GiB, number only) [${PROFILE_DISK_GIB}]: " DISK_GIB
+fi
 DISK_GIB="${DISK_GIB:-${PROFILE_DISK_GIB}}"
 
 [[ "${CPU_CORES}" =~ ^[0-9]+$ ]] || fail 'CPU cores must be numeric.'
@@ -171,7 +295,22 @@ for i in "${!IMAGE_ROWS[@]}"; do
   printf '%2d) alias=%s  fp=%s  type=%s  arch=%s  desc=%s\n' "$((i + 1))" "$alias" "$shortfp" "$imgtype" "$arch" "$desc"
 done
 
-read -r -p 'Choose image number: ' IMAGE_INDEX
+if [[ -n "${IMAGE_INDEX_ARG}" ]]; then
+  IMAGE_INDEX="${IMAGE_INDEX_ARG}"
+elif [[ -n "${IMAGE_ALIAS_ARG}" ]]; then
+  IMAGE_MATCH=''
+  for i in "${!IMAGE_ROWS[@]}"; do
+    IFS=$'\t' read -r alias shortfp imgtype arch desc <<< "${IMAGE_ROWS[$i]}"
+    if [[ "${alias}" == "${IMAGE_ALIAS_ARG}" ]]; then
+      IMAGE_MATCH="$((i + 1))"
+      break
+    fi
+  done
+  [[ -n "${IMAGE_MATCH}" ]] || fail "image alias '${IMAGE_ALIAS_ARG}' was not found in the filtered list."
+  IMAGE_INDEX="${IMAGE_MATCH}"
+else
+  read -r -p 'Choose image number: ' IMAGE_INDEX
+fi
 [[ "${IMAGE_INDEX}" =~ ^[0-9]+$ ]] || fail 'image selection must be numeric.'
 (( IMAGE_INDEX >= 1 && IMAGE_INDEX <= ${#IMAGE_ROWS[@]} )) || fail 'image selection is out of range.'
 SELECTED_ROW="${IMAGE_ROWS[$((IMAGE_INDEX - 1))]}"
@@ -222,7 +361,11 @@ run lxc network forward create "${NETWORK_NAME}" --project "${PROJECT_NAME}" --a
 LISTEN_IPV4="$(lxc network forward list "${NETWORK_NAME}" --project "${PROJECT_NAME}" --format json | jq -r --arg target "${INSTANCE_IPV4}" '.[] | select(.config.target_address == $target) | .listen_address' | tail -n1)"
 [[ -n "${LISTEN_IPV4}" && "${LISTEN_IPV4}" != 'null' ]] || fail 'unable to determine allocated forward listen IPv4 address.'
 
-read -r -p 'Description suffix (optional): ' DESCRIPTION_SUFFIX
+if [[ -n "${DESCRIPTION_SUFFIX_ARG}" ]]; then
+  DESCRIPTION_SUFFIX="${DESCRIPTION_SUFFIX_ARG}"
+else
+  read -r -p 'Description suffix (optional): ' DESCRIPTION_SUFFIX
+fi
 DESCRIPTION_TEXT="${LISTEN_IPV4} ${SELECTED_ALIAS}"
 if [[ -n "${DESCRIPTION_SUFFIX}" ]]; then
   DESCRIPTION_TEXT="${DESCRIPTION_TEXT} ${DESCRIPTION_SUFFIX}"

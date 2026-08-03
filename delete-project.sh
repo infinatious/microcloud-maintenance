@@ -11,9 +11,40 @@ fail() {
   exit 1
 }
 
+usage() {
+  cat <<'EOF'
+Usage: delete-project.sh --project-id ID
+
+Options:
+  --project-id ID   Numeric project ID to select the project to delete.
+  --help            Show this help message.
+
+Examples:
+  ./delete-project.sh --project-id 42
+EOF
+}
+
 run() {
   "$@" || fail "command failed: $*"
 }
+
+PROJECT_ID_ARG=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project-id)
+      [[ $# -ge 2 ]] || fail 'missing value for --project-id.'
+      PROJECT_ID_ARG="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1"
+      ;;
+  esac
+done
 
 command -v lxc >/dev/null 2>&1 || fail 'lxc command not found in PATH.'
 
@@ -32,7 +63,11 @@ for PROJECT_ENTRY in "${PROJECT_OPTIONS[@]}"; do
   IFS=$'\t' read -r PROJECT_ID PROJECT_NAME <<< "${PROJECT_ENTRY}"
   printf '%2s) %s\n' "${PROJECT_ID}" "${PROJECT_NAME}"
 done
-read -r -p 'Choose project ID: ' SELECTED_PROJECT_ID
+if [[ -n "${PROJECT_ID_ARG}" ]]; then
+  SELECTED_PROJECT_ID="${PROJECT_ID_ARG}"
+else
+  read -r -p 'Choose project ID: ' SELECTED_PROJECT_ID
+fi
 [[ "${SELECTED_PROJECT_ID}" =~ ^[0-9]+$ ]] || fail 'project selection must be numeric.'
 PROJECT_NAME="$(awk -F '\t' -v pid="${SELECTED_PROJECT_ID}" '$1 == pid {print $2}' <<< "$(printf '%s\n' "${PROJECT_OPTIONS[@]}")")"
 [[ -n "${PROJECT_NAME}" ]] || fail "project ID '${SELECTED_PROJECT_ID}' is not available."

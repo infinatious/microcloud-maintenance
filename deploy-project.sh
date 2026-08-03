@@ -19,6 +19,20 @@ fail() {
   exit 1
 }
 
+usage() {
+  cat <<'EOF'
+Usage: deploy-project.sh --project-name NAME --project-id ID
+
+Options:
+  --project-name NAME   Project name to create.
+  --project-id ID       Numeric project ID from 0 to 255.
+  --help                Show this help message.
+
+Examples:
+  ./deploy-project.sh --project-name demo --project-id 42
+EOF
+}
+
 run() {
   "$@" || fail "command failed: $*"
 }
@@ -30,8 +44,36 @@ cleanup_network() {
   fi
 }
 
-read -r -p 'Project name: ' PROJECT_NAME
-read -r -p 'Project ID (0-255): ' PROJECT_ID
+PROJECT_NAME=''
+PROJECT_ID=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project-name)
+      [[ $# -ge 2 ]] || fail 'missing value for --project-name.'
+      PROJECT_NAME="$2"
+      shift 2
+      ;;
+    --project-id)
+      [[ $# -ge 2 ]] || fail 'missing value for --project-id.'
+      PROJECT_ID="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1"
+      ;;
+  esac
+done
+
+if [[ -z "${PROJECT_NAME}" ]]; then
+  read -r -p 'Project name: ' PROJECT_NAME
+fi
+if [[ -z "${PROJECT_ID}" ]]; then
+  read -r -p 'Project ID (0-255): ' PROJECT_ID
+fi
 
 [[ -n "${PROJECT_NAME}" ]] || fail 'project name cannot be empty.'
 [[ "${PROJECT_ID}" =~ ^[0-9]+$ ]] || fail 'project ID must be numeric.'

@@ -11,6 +11,24 @@ fail() {
   exit 1
 }
 
+usage() {
+  cat <<'EOF'
+Usage: resize-instance.sh --project-id ID [--instance-index N] [--cpu N] [--ram GIB] [--boot-disk GIB] [--yes]
+
+Options:
+  --project-id ID       Numeric project ID to select the project.
+  --instance-index N    Numeric instance list index (1-based) to resize.
+  --cpu N               New CPU core count.
+  --ram GIB             New RAM size in GiB.
+  --boot-disk GIB       New boot disk size in GiB.
+  --yes                 Skip the confirmation prompt.
+  --help                Show this help message.
+
+Examples:
+  ./resize-instance.sh --project-id 42 --instance-index 1 --cpu 4 --ram 8 --boot-disk 60 --yes
+EOF
+}
+
 run() {
   "$@" || fail "command failed: $*"
 }
@@ -18,6 +36,53 @@ run() {
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "required command '$1' not found in PATH."
 }
+
+PROJECT_ID_ARG=''
+INSTANCE_INDEX_ARG=''
+NEW_CPU_ARG=''
+NEW_RAM_ARG=''
+NEW_BOOT_ARG=''
+CONFIRM_ARG=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project-id)
+      [[ $# -ge 2 ]] || fail 'missing value for --project-id.'
+      PROJECT_ID_ARG="$2"
+      shift 2
+      ;;
+    --instance-index)
+      [[ $# -ge 2 ]] || fail 'missing value for --instance-index.'
+      INSTANCE_INDEX_ARG="$2"
+      shift 2
+      ;;
+    --cpu)
+      [[ $# -ge 2 ]] || fail 'missing value for --cpu.'
+      NEW_CPU_ARG="$2"
+      shift 2
+      ;;
+    --ram)
+      [[ $# -ge 2 ]] || fail 'missing value for --ram.'
+      NEW_RAM_ARG="$2"
+      shift 2
+      ;;
+    --boot-disk)
+      [[ $# -ge 2 ]] || fail 'missing value for --boot-disk.'
+      NEW_BOOT_ARG="$2"
+      shift 2
+      ;;
+    --yes)
+      CONFIRM_ARG='yes'
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1"
+      ;;
+  esac
+done
 
 require_cmd lxc
 require_cmd python3
@@ -37,7 +102,11 @@ for PROJECT_ENTRY in "${PROJECT_OPTIONS[@]}"; do
   IFS=$'\t' read -r PROJECT_ID PROJECT_NAME <<< "${PROJECT_ENTRY}"
   printf '%2s) %s\n' "${PROJECT_ID}" "${PROJECT_NAME}"
 done
-read -r -p 'Choose project ID: ' SELECTED_PROJECT_ID
+if [[ -n "${PROJECT_ID_ARG}" ]]; then
+  SELECTED_PROJECT_ID="${PROJECT_ID_ARG}"
+else
+  read -r -p 'Choose project ID: ' SELECTED_PROJECT_ID
+fi
 [[ "${SELECTED_PROJECT_ID}" =~ ^[0-9]+$ ]] || fail 'project selection must be numeric.'
 PROJECT_NAME="$(awk -F '\t' -v pid="${SELECTED_PROJECT_ID}" '$1 == pid {print $2}' <<< "$(printf '%s\n' "${PROJECT_OPTIONS[@]}")")"
 [[ -n "${PROJECT_NAME}" ]] || fail "project ID '${SELECTED_PROJECT_ID}' is not available."
@@ -53,7 +122,11 @@ for i in "${!INSTANCE_ROWS[@]}"; do
   printf '%2d) %-32s type=%-4s state=%-10s ipv4=%-15s desc=%s\n' "$((i + 1))" "$NAME" "${TYPE:--}" "${STATE:-unknown}" "${IPV4:--}" "${DESCRIPTION:--}"
 done
 
-read -r -p 'Enter instance number to resize: ' INSTANCE_INDEX
+if [[ -n "${INSTANCE_INDEX_ARG}" ]]; then
+  INSTANCE_INDEX="${INSTANCE_INDEX_ARG}"
+else
+  read -r -p 'Enter instance number to resize: ' INSTANCE_INDEX
+fi
 [[ "${INSTANCE_INDEX}" =~ ^[0-9]+$ ]] || fail 'instance selection must be numeric.'
 (( INSTANCE_INDEX >= 1 && INSTANCE_INDEX <= ${#INSTANCE_ROWS[@]} )) || fail 'instance selection is out of range.'
 
@@ -96,9 +169,21 @@ echo "Description   : ${INSTANCE_DESCRIPTION:--}"
 echo
 
 echo 'Enter new values.'
-read -r -p "CPU cores [${CURRENT_CPU}]: " NEW_CPU
-read -r -p "RAM in GiB [${CURRENT_RAM}]: " NEW_RAM
-read -r -p "Boot disk in GiB [${CURRENT_BOOT}]: " NEW_BOOT
+if [[ -n "${NEW_CPU_ARG}" ]]; then
+  NEW_CPU="${NEW_CPU_ARG}"
+else
+  read -r -p "CPU cores [${CURRENT_CPU}]: " NEW_CPU
+fi
+if [[ -n "${NEW_RAM_ARG}" ]]; then
+  NEW_RAM="${NEW_RAM_ARG}"
+else
+  read -r -p "RAM in GiB [${CURRENT_RAM}]: " NEW_RAM
+fi
+if [[ -n "${NEW_BOOT_ARG}" ]]; then
+  NEW_BOOT="${NEW_BOOT_ARG}"
+else
+  read -r -p "Boot disk in GiB [${CURRENT_BOOT}]: " NEW_BOOT
+fi
 
 [[ -n "${NEW_CPU}" ]] || NEW_CPU="${CURRENT_CPU}"
 [[ -n "${NEW_RAM}" ]] || NEW_RAM="${CURRENT_RAM}"
@@ -127,7 +212,11 @@ echo "Instance      : ${INSTANCE_NAME}"
 echo "CPU           : ${CURRENT_CPU} -> ${NEW_CPU}"
 echo "RAM           : ${CURRENT_RAM} -> ${NEW_RAM}"
 echo "Boot disk     : ${CURRENT_BOOT} -> ${NEW_BOOT}"
-read -r -p 'Type yes to apply these changes: ' CONFIRM
+if [[ -n "${CONFIRM_ARG}" ]]; then
+  CONFIRM='yes'
+else
+  read -r -p 'Type yes to apply these changes: ' CONFIRM
+fi
 [[ "${CONFIRM}" == 'yes' ]] || fail 'resize cancelled.'
 
 WAS_RUNNING=0
