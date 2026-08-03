@@ -13,16 +13,18 @@ fail() {
 
 usage() {
   cat <<'EOF'
-Usage: delete-instance.sh --project-id ID [--instance-index N] [--yes]
+Usage: delete-instance.sh --project-id ID [--instance-index N | --instance-name NAME] [--yes]
 
 Options:
   --project-id ID       Numeric project ID to select the project.
   --instance-index N    Numeric instance list index (1-based) to delete.
+  --instance-name NAME  Exact instance name to delete.
   --yes                 Skip the confirmation prompt.
   --help                Show this help message.
 
 Examples:
   ./delete-instance.sh --project-id 42 --instance-index 2 --yes
+  ./delete-instance.sh --project-id 42 --instance-name p24-tstng-ct01 --yes
 EOF
 }
 
@@ -36,6 +38,7 @@ require_cmd() {
 
 PROJECT_ID_ARG=''
 INSTANCE_INDEX_ARG=''
+INSTANCE_NAME_ARG=''
 CONFIRM_ARG=''
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -47,6 +50,11 @@ while [[ $# -gt 0 ]]; do
     --instance-index)
       [[ $# -ge 2 ]] || fail 'missing value for --instance-index.'
       INSTANCE_INDEX_ARG="$2"
+      shift 2
+      ;;
+    --instance-name)
+      [[ $# -ge 2 ]] || fail 'missing value for --instance-name.'
+      INSTANCE_NAME_ARG="$2"
       shift 2
       ;;
     --yes)
@@ -102,15 +110,28 @@ for i in "${!INSTANCE_ROWS[@]}"; do
 ' "$((i + 1))" "$NAME" "${STATE:-unknown}" "${IPV4:--}" "${DESCRIPTION:--}"
 done
 
-if [[ -n "${INSTANCE_INDEX_ARG}" ]]; then
+if [[ -n "${INSTANCE_NAME_ARG}" ]]; then
+  SELECTED_ROW=''
+  for INSTANCE_ROW in "${INSTANCE_ROWS[@]}"; do
+    IFS=',' read -r NAME DESCRIPTION STATE IPV4 <<< "${INSTANCE_ROW}"
+    if [[ "${NAME}" == "${INSTANCE_NAME_ARG}" ]]; then
+      SELECTED_ROW="${INSTANCE_ROW}"
+      break
+    fi
+  done
+  [[ -n "${SELECTED_ROW}" ]] || fail "instance '${INSTANCE_NAME_ARG}' was not found in project '${PROJECT_NAME}'."
+elif [[ -n "${INSTANCE_INDEX_ARG}" ]]; then
   INSTANCE_INDEX="${INSTANCE_INDEX_ARG}"
+  [[ "${INSTANCE_INDEX}" =~ ^[0-9]+$ ]] || fail 'instance selection must be numeric.'
+  (( INSTANCE_INDEX >= 1 && INSTANCE_INDEX <= ${#INSTANCE_ROWS[@]} )) || fail 'instance selection is out of range.'
+  SELECTED_ROW="${INSTANCE_ROWS[$((INSTANCE_INDEX - 1))]}"
 else
   read -r -p 'Enter instance number to delete: ' INSTANCE_INDEX
+  [[ "${INSTANCE_INDEX}" =~ ^[0-9]+$ ]] || fail 'instance selection must be numeric.'
+  (( INSTANCE_INDEX >= 1 && INSTANCE_INDEX <= ${#INSTANCE_ROWS[@]} )) || fail 'instance selection is out of range.'
+  SELECTED_ROW="${INSTANCE_ROWS[$((INSTANCE_INDEX - 1))]}"
 fi
-[[ "${INSTANCE_INDEX}" =~ ^[0-9]+$ ]] || fail 'instance selection must be numeric.'
-(( INSTANCE_INDEX >= 1 && INSTANCE_INDEX <= ${#INSTANCE_ROWS[@]} )) || fail 'instance selection is out of range.'
 
-SELECTED_ROW="${INSTANCE_ROWS[$((INSTANCE_INDEX - 1))]}"
 IFS=',' read -r INSTANCE_NAME INSTANCE_DESCRIPTION INSTANCE_STATE INSTANCE_IPV4 <<< "${SELECTED_ROW}"
 FORWARD_IP="$(lxc config get "${INSTANCE_NAME}" user.network_forward_ipv4 --project "${PROJECT_NAME}" 2>/dev/null || true)"
 

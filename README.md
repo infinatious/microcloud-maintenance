@@ -147,12 +147,14 @@ Examples:
 
 ```bash
 ./delete-instance.sh --project-id 42 --instance-index 2 --yes
+./delete-instance.sh --project-id 42 --instance-name p42-tstng-ct01 --yes
 ```
 
 Supported arguments:
 
 - `--project-id` selects the source project by numeric project ID.
 - `--instance-index` selects the instance from the numbered list.
+- `--instance-name` deletes the instance directly by exact LXD instance name.
 - `--yes` skips the final confirmation prompt.
 
 #### `delete-project.sh`
