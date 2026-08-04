@@ -35,7 +35,7 @@ In practice, that means:
 
 The important idea is that `UPLINK-NAT` should represent a real physical uplink path, not an isolated bridge or a private virtual network.
 
-A typical configuration pattern looks like this conceptually, using an uplink network of 192.168.232.0/21:
+A typical configuration pattern looks like this conceptually, using an uplink network of 172.31.232.0/21:
 
 ```yaml
 access_entitlements:
@@ -47,9 +47,9 @@ description: ''
 type: physical
 config:
   dns.nameservers: 1.1.1.1,9.9.9.9
-  ipv4.gateway: 192.168.232.1/21
-  ipv4.routes: 192.168.233.0/24,192.168.234.0/24,192.168.235.0/24,192.168.236.0/24, 192.168.237.0/24, 192.168.238.0/24, 192.168.239.0/24, 192.168.232.128/25
-  ipv4.ovn.ranges: 192.168.232.2-192.168.232.127
+  ipv4.gateway: 172.31.232.1/21
+  ipv4.routes: 172.31.233.0/24,172.31.234.0/24,172.31.235.0/24,172.31.236.0/24, 172.31.237.0/24, 172.31.238.0/24, 172.31.239.0/24, 172.31.232.128/25
+  ipv4.ovn.ranges: 172.31.232.2-172.31.232.127
 ```
 
 Use values that match your site network planning. The exact address block should be chosen to fit the external network that the host is attached to.
@@ -103,14 +103,13 @@ Create a new instance inside an existing project.
 Examples:
 
 ```bash
-./create-instance.sh --project-id 42 --environment p --service-code demo1 --profile-type linux --cpu 2 --ram 4 --disk 20 --image-index 3
-./create-instance.sh --project-id 42 --environment d --service-code svc01 --profile-type win --image-alias ubuntu --description-suffix 'site-a'
+./create-instance.sh --project-id 42 --environment d --service-code tstng --profile-type linux --image-alias ubuntu2604 --cpu 1 --ram 2 --disk 20 --description-suffix 'site-a'
 ```
 
 Supported arguments:
 
 - `--project-id` selects the target project by numeric project ID.
-- `--environment` uses `p`, `t`, `q`, or `d`.
+- `--environment` uses `p`, `t`, `q`, or `d`. (Prod, Test, QA, Dev)
 - `--service-code` must be exactly five alphanumeric characters.
 - `--profile-type` is `linux` or `win`.
 - `--cpu`, `--ram`, and `--disk` override the profile defaults.
@@ -146,7 +145,6 @@ Delete a single instance safely.
 Examples:
 
 ```bash
-./delete-instance.sh --project-id 42 --instance-index 2 --yes
 ./delete-instance.sh --project-id 42 --instance-name p42-tstng-ct01 --yes
 ```
 
@@ -165,16 +163,16 @@ Examples:
 
 ```bash
 ./delete-project.sh --project-id 42
-./delete-project.sh --project-id 42 --delete-instances --yes
+./delete-project.sh --project-id 42 --delete-instances
 ```
 
 Supported arguments:
 
 - `--project-id` selects the project by numeric project ID.
 - `--delete-instances` stops and deletes every instance in the project before the project itself is removed.
-- `--yes` skips the confirmation prompt for the instance cleanup.
+- `--yes` skips the confirmation prompt for the instance cleanup. Probably shouldn't use this.
 
-A normal delete run will still refuse to proceed if the project still contains instances unless you pass `--delete-instances`.
+A normal delete run will refuse to proceed if the project still contains instances unless you pass `--delete-instances`.
 
 ### Deployment flow
 
@@ -198,7 +196,7 @@ A normal delete run will still refuse to proceed if the project still contains i
 
 ### Resize flow
 
-1. Run `resize-instance.sh` with `--project-id`, `--instance-index`, and the desired resource values, or let it prompt interactively.
+1. Run `resize-instance.sh` and let it prompt interactively.
 2. The existing description is preserved as-is.
 3. If the new boot disk is larger while the instance is running, the script will stop and restart it automatically.
 
@@ -216,3 +214,8 @@ A normal delete run will still refuse to proceed if the project still contains i
 - The Linux profile is intended for cloud-init based image deployment.
 - The Windows profile is intended for Windows-capable images and uses a `64GiB` root disk.
 - The image picker filters the list based on the chosen profile family so that Linux selections exclude names containing `win`, and Windows selections only show images whose names include `win`.
+- The following can be used to set image aliases:
+```
+lxc image list local: -c LFd
+lxc image alias create NAME FINGERPRINT --project default
+```
